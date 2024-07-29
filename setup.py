@@ -1,15 +1,21 @@
 from setuptools import setup
+import sys
+
+if sys.version_info < (3, 8):
+    raise RuntimeError("aiohttp 4.x requires Python 3.8+")
 
 setup(
     name='topscore',
     version='0.0.1',
     packages=['topscore'],
-    url='https://github.com/bostonultimatediscalliance/topscore',
+    url='https://github.com/cherianb59/topscore',
     license='',
-    author='Ian Marlier',
-    author_email='ian.marlier@buda.org',
-    description='API Client for TopScore',
+    author='Ben Cherian, Ian Marlier',
+    author_email='',
+    keywords="topscore usetopscore ultimate",
+    description='Python API Client for TopScore',
     install_requires=[
-    	'requests'
+    	'requests',
+        'aiohttp'
     	]
 )
