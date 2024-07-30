@@ -14,36 +14,30 @@ default_headers = {
 
 class TopScoreException(Exception):
   pass
-
-
+ 
 class TopScoreClient(object):
-  def __init__(self, client_id, client_secret, base_url, oauth_client_id,oauth_client_secret, email, password, headers = default_headers):
+  def __init__(self,  base_url, oauth_client_id,oauth_client_secret, headers = default_headers):
     
-    self.client_id = client_id
-    self.client_secret = client_secret
     self.base_url = base_url
     
     self.oauth_client_id = oauth_client_id
     self.oauth_client_secret = oauth_client_secret
-    self.email = email
-    self.password = password
     self.headers = headers
     
     self.access_token = self.get_oauth_access_token()
 
   def get_oauth_access_token(self):
     url = f"{self.base_url}/api/oauth/server"
-    oath_params= {'grant_type':'password',
+     
+    oauth_params= {'grant_type':'client_credentials',
             'client_id':self.oauth_client_id,
             'client_secret':self.oauth_client_secret,
-            'username':self.email,
-            'password':self.password,
             }
-    result = requests.post(url, data = oath_params, headers = self.headers)
     
+    result = requests.post(url, data = oauth_params, headers = self.headers)
+
     if result.status_code == 200:
       access_token = result.json()['access_token']
-      self.access_token = access_token
       return(access_token)
     else:
       raise TopScoreException(f"OAuth Fail\n{result}")
@@ -60,29 +54,20 @@ class TopScoreClient(object):
     return f"{self.base_url}/api/{endpoint}"
 
   def get(self, endpoint, page=1, per_page=100, **params):
-    params['auth_token'] = self.client_id
-    params['api_csrf'] = self.csrf().decode('ascii')
     params['page'] = page
     params['per_page'] = per_page
     access_token = self.access_token
     headers = {"Authorization": f"Bearer {self.access_token}"} | self.headers
     
     r = requests.get(self.construct_url(endpoint), params=params, headers=headers)
-    rjson = r.json()
-    
-    if rjson['status'] == 401 and rjson['errors'][0]['message'] == "Invalid auth token." :      
-      access_token = self.get_oauth_access_token()
-      headers = {"Authorization": f"Bearer {self.access_token}"}
-      r = requests.get(self.construct_url(endpoint), params=params, headers=headers)
-      
+          
     return(r)
 
   def post(self, endpoint, data={}, page=1, per_page=100, **params):
-    params['auth_token'] = self.client_id
-    params['api_csrf'] = self.csrf().decode('ascii')
     params['page'] = page
     params['per_page'] = per_page
-    return requests.post(self.construct_url(endpoint), data=data, params=params)
+    headers = {"Authorization": f"Bearer {self.access_token}"} | self.headers
+    return requests.post(self.construct_url(endpoint), data=data, params=params, headers=headers)
 
   def get_paginated(self, endpoint, page=1, per_page=100, **params):
     result = self.get(endpoint, page, per_page, **params).json()
@@ -120,52 +105,22 @@ class TopScoreClient(object):
     }, **params)
     return r.json()
 
+#creator id and end are required parameters
+  def update_event(self, event_id, creator_id, end,  **params):
+    r = self.post("events/edit", data={
+      'id': [event_id],
+      creator_id : creator_id ,
+      end : end ,
+    }, **params)
+    return r.json()
+
   def get_games_show(self, **params):
     r = self.get("games/show", **params)
     return r.json()
 
-  def get_all_pages(self,endpoint, **params):
-    endpoints = ["tags","games","registrations","events","persons","teams","fields","transactions","persons"]
-    
-    if endpoint in endpoints :
-        return [item for sublist in asyncio.run(self.fetch_all(endpoint, **params)) for item in sublist]
-    else: raise TopScoreException(f"{endpoint} not in {endpoints}")
-    
-  def get_tags(self, **params):
-    return self.get_paginated("tags", **params)
-
-  def get_games(self, **params):
-    return self.get_paginated("games", **params)
-
-  def get_registrations(self, **params):
-    return self.get_paginated("registrations", **params)
-
-  def get_events(self, **params):
-    return self.get_paginated("events", **params)
-
-  def get_people(self, **params):
-    return self.get_paginated("persons", **params)
-
-  def get_persons(self, id, **params):
-    return self.get_paginated("persons", **params)
-
-  def get_teams(self, **params):
-    return self.get_paginated("teams", **params)
-
-  def get_fields(self, **params):
-    return self.get_paginated("fields", **params)
-
-  def get_transactions(self, **params):
-    return self.get_paginated("transactions", **params)
-
-  def get_persons(self,  **params):
-    return self.get_paginated("persons", **params)
-
 # async function to make a single request
   async def fetch(self, endpoint, session, page=1, per_page=100,  **params ):
     
-    params['auth_token'] = self.client_id
-    params['api_csrf'] = self.csrf().decode('ascii')
     params['page'] = page
     params['per_page'] = per_page
     
@@ -198,3 +153,41 @@ class TopScoreClient(object):
           return [results]
     else:
       raise TopScoreException(f"Endpoint: {endpoint} \n Params: {params} \n Result:{result} \nUnable to get a paginated response from TopScore")
+      
+  def get_all_pages(self,endpoint, **params):
+    endpoints = ["tags","games","registrations","events","persons","teams","fields","transactions","persons"]
+    
+    if endpoint in endpoints :
+        return [item for sublist in asyncio.run(self.fetch_all(endpoint, **params)) for item in sublist]
+    else: raise TopScoreException(f"{endpoint} not in {endpoints}")
+
+#old functions that dont use async    
+  def get_tags(self, **params):
+    return self.get_paginated("tags", **params)
+
+  def get_games(self, **params):
+    return self.get_paginated("games", **params)
+
+  def get_registrations(self, **params):
+    return self.get_paginated("registrations", **params)
+
+  def get_events(self, **params):
+    return self.get_paginated("events", **params)
+
+  def get_people(self, **params):
+    return self.get_paginated("persons", **params)
+
+  def get_persons(self, id, **params):
+    return self.get_paginated("persons", **params)
+
+  def get_teams(self, **params):
+    return self.get_paginated("teams", **params)
+
+  def get_fields(self, **params):
+    return self.get_paginated("fields", **params)
+
+  def get_transactions(self, **params):
+    return self.get_paginated("transactions", **params)
+
+  def get_persons(self,  **params):
+    return self.get_paginated("persons", **params)
