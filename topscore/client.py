@@ -6,6 +6,8 @@ import time
 import uuid
 import asyncio
 import aiohttp
+from bs4 import BeautifulSoup
+
 
 default_headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -14,16 +16,35 @@ default_headers = {
 
 class TopScoreException(Exception):
   pass
- 
+          
 class TopScoreClient(object):
-  def __init__(self,  base_url, oauth_client_id,oauth_client_secret, headers = default_headers):
+  def __init__(self,  base_url, oauth_client_id = '' , oauth_client_secret = '' , email = '' , password = '' , headers = default_headers):
+    
+    if not base_url : raise TopScoreException(f"""base_url required""")
     
     self.base_url = base_url
-    
-    self.oauth_client_id = oauth_client_id
-    self.oauth_client_secret = oauth_client_secret
     self.headers = headers
     
+    #if these two not empty 
+    if ( oauth_client_id and oauth_client_secret)  :
+      
+      self.oauth_client_id = oauth_client_id
+      self.oauth_client_secret = oauth_client_secret
+    
+    #try logging in and scraping     
+    elif  (email  and password ): 
+      self.email = email 
+      self.password = password
+      
+      #login with credentials and then scrape the oauth_client_id and oauth_client_secret 
+      login_details = self.extract_oauth_tokens()
+      self.oauth_client_id = login_details['Client ID [access_token]'] 
+      self.oauth_client_secret = login_details['Client Secret']
+      
+    else:
+      raise TopScoreException(f"""Either (oauth_client_id and oauth_client_secret) or (email and password) must be non empty
+                              Received oauth_client_id:'{oauth_client_id}' oauth_client_secret:'{oauth_client_secret}' email:'{email}' password:'{password}'""")
+      
     self.access_token = self.get_oauth_access_token()
 
   def get_oauth_access_token(self):
@@ -41,8 +62,71 @@ class TopScoreClient(object):
       return(access_token)
     else:
       raise TopScoreException(f"OAuth Fail\n{result}")
-  
+
+
+  def extract_oauth_tokens(self):
+
+    # URL of the oauth-key page
+    login_url = f'{self.base_url}/u/oauth-key'
+
+    with requests.session() as s: 
+      req = s.get(login_url, headers = default_headers).text 
+      html = BeautifulSoup(req,"html.parser") 
+      #get the token 
+      token = html.find("input", {"name": "connect_id"}).attrs["value"] 
+
+    # Construct the login request payload
+    login_payload = {
+    'signin[xvz32]': "" ,
+    'signin[email]': self.email,
+    'signin[account]': 'exists',
+    'signin[password]': self.password,
+    'signin[return_url]': login_url ,
+    'signin[family_id]':  "" ,
+    'connect_id': token
+    }
+
+    session = requests.Session()
+    # Send login POST request, i.e. login
+    login_post = session.post(login_url, data=login_payload, headers = default_headers)
+
+    #login_post_html = BeautifulSoup(login_post.content.decode('utf-8'), 'html.parser')
+
+    #Get oauth page
+    response = session.get(login_url, headers = default_headers)
+
+    logged_in_html = BeautifulSoup(response.content, 'html.parser')
+
+    #Try to extract tokens
+    try:
+      table = logged_in_html.find('table', class_='table no-border')
+      rows = table.find_all('tr')
+
+      data = {}
+      for row in rows:
+        cells = row.find_all(['th', 'td'])
+        if len(cells) > 1:
+          key = cells[0].get_text(strip=True)
+          value = cells[1].get_text(strip=True)
+          data[key] =  value
+
+      return(data)
+    
+    except Exception as e1:
+    #attempt to catch known errors, i.e. wrong email/ password  
+      try:
+        login_error = login_post_html.find('div', class_='form-error')
+
+        if login_error == "Please enter a valid email address." : raise TopScoreException(f"""{login_error}""")
+        elif login_error == "Invalid password." : raise TopScoreException(f"""{login_error}""")
+        else : raise TopScoreException(f"""{e1}""")
+
+    #catch unknown errors
+      except Exception as e2: 
+        raise TopScoreException(f"""{e2}""")
+
   def csrf(self):
+    #function currently unused
     nonce = bytes(str(uuid.uuid4()), 'ascii')
     ts = bytes(str(round(time.time())), 'ascii')
     message = bytes(self.client_id, 'ascii') + nonce + ts
@@ -69,32 +153,8 @@ class TopScoreClient(object):
     headers = {"Authorization": f"Bearer {self.access_token}"} | self.headers
     return requests.post(self.construct_url(endpoint), data=data, params=params, headers=headers)
 
-  def get_paginated(self, endpoint, page=1, per_page=100, **params):
-    result = self.get(endpoint, page, per_page, **params).json()
-    results = result['result']
-
-    if result['status'] == 200:
-      if 'count' in result:
-        if result['count'] > (page * per_page):
-          results += self.get_paginated(endpoint, page + 1, per_page, **params)
-    else:
-      raise TopScoreException(f"Endpoint: {endpoint} \n Params: {params} \n Result:{result} \nUnable to get a paginated response from TopScore")
-    return results
-
-  def get_help(self):
-    r = self.get("help")
-    return r.json()
-
   def get_me(self):
     r = self.post("me")
-    return r.json()
-
-  def get_person(self, id, **params):
-    r = self.get("persons", id=id, **params)
-    return r.json()
-
-  def get_tags_show(self, **params):
-    r = self.get("tags/show", **params)
     return r.json()
 
   def update_game(self, game_id, field, value, **params):
@@ -105,7 +165,7 @@ class TopScoreClient(object):
     }, **params)
     return r.json()
 
-#creator id and end are required parameters
+  #creator_id and end are required
   def update_event(self, event_id, creator_id, end,  **params):
     r = self.post("events/edit", data={
       'id': [event_id],
@@ -114,11 +174,24 @@ class TopScoreClient(object):
     }, **params)
     return r.json()
 
+  def get_help(self):
+    r = self.get("help")
+    return r.json()
+
+  def get_person(self, id, **params):
+    r = self.get("persons", id=id, **params)
+    return r.json()
+
+  def get_tags_show(self, **params):
+    r = self.get("tags/show", **params)
+    return r.json()
+
   def get_games_show(self, **params):
     r = self.get("games/show", **params)
     return r.json()
 
-# async function to make a single request
+
+  # async function to make a single request
   async def fetch(self, endpoint, session, page=1, per_page=100,  **params ):
     
     params['page'] = page
@@ -134,7 +207,7 @@ class TopScoreClient(object):
       return results
 
 
-# async function to make multiple requests
+  # async function to make multiple requests
   async def fetch_all(self, endpoint, page=1, per_page=100, **params):
     
     result = self.get(endpoint, page, per_page, **params).json()
@@ -161,7 +234,19 @@ class TopScoreClient(object):
         return [item for sublist in asyncio.run(self.fetch_all(endpoint, **params)) for item in sublist]
     else: raise TopScoreException(f"{endpoint} not in {endpoints}")
 
-#old functions that dont use async    
+  # non async functions to get data  
+  def get_paginated(self, endpoint, page=1, per_page=100, **params):
+    result = self.get(endpoint, page, per_page, **params).json()
+    results = result['result']
+
+    if result['status'] == 200:
+      if 'count' in result:
+        if result['count'] > (page * per_page):
+          results += self.get_paginated(endpoint, page + 1, per_page, **params)
+    else:
+      raise TopScoreException(f"Endpoint: {endpoint} \n Params: {params} \n Result:{result} \nUnable to get a paginated response from TopScore")
+    return results
+    
   def get_tags(self, **params):
     return self.get_paginated("tags", **params)
 

@@ -12,10 +12,11 @@ setup(
     license='',
     author='Ben Cherian, Ian Marlier',
     author_email='',
-    keywords="topscore usetopscore ultimate",
+    keywords="topscore usetopscore ultimate frisbee",
     description='Python API Client for TopScore',
     install_requires=[
     	'requests',
-        'aiohttp'
+        'aiohttp',
+        'beautifulsoup4'
     	]
 )
