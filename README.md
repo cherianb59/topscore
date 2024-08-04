@@ -56,3 +56,14 @@ SITE_USERNAME_PASSWORD and SITE_PASSWORD are the email and password used to logi
 ```
 >>> survey_field_params = {"fields[Stage]":"Stage", "fields[GameTeamProxys]":"GameTeamProxys" , "fields[GameTeamProxys]" : "SurveyAnswerSets", "fields[GameTeamProxys][SurveyAnswerSets]" : "SurveyAnswers" }
 >>> games = client.get_all_pages("games", event_id = XXXXXXXXX ,**survey_field_params)
+```
+
+Jupyter Lab
+------------
+
+This library uses asyncio which doesn't play nicely with jupyter lab, I've found this snippet very handy
+```
+import nest_asyncio
+nest_asyncio.apply()
+```
+
