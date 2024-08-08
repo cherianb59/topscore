@@ -1,13 +1,14 @@
 import base64
 import hashlib
 import hmac
-import requests
 import time
 import uuid
+import re 
 import asyncio
+
+import requests
 import aiohttp
 from bs4 import BeautifulSoup
-
 
 default_headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -66,6 +67,9 @@ class TopScoreClient(object):
 
   def extract_oauth_tokens(self):
 
+    # Replace "ultimatecentral" with "usetopscore"
+    self.base_url = re.sub(r"(?<=\.)ultimatecentral(?=\.com)", "usetopscore", self.base_url)
+    
     # URL of the oauth-key page
     login_url = f'{self.base_url}/u/oauth-key'
 
@@ -276,3 +280,4 @@ class TopScoreClient(object):
 
   def get_persons(self,  **params):
     return self.get_paginated("persons", **params)
+
