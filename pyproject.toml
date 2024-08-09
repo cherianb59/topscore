@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topscore"
+version = "0.0.2"
+dependencies = ['requests',
+        'aiohttp',
+        'beautifulsoup4'
+]
+authors = [
+  { name="Ben Cherian" },
+]
+description = "Topscore API python client"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/cherianb59/topscore"
+Issues = "https://github.com/cherianb59/topscore/issues"
