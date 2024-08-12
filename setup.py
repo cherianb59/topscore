@@ -6,7 +6,7 @@ if sys.version_info < (3, 8):
 
 setup(
     name='topscore',
-    version='0.0.1',
+    version='0.0.2',
     packages=['topscore'],
     url='https://github.com/cherianb59/topscore',
     author='Ben Cherian, Ian Marlier',

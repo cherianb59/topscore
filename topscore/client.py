@@ -32,7 +32,7 @@ class TopScoreClient(object):
       self.oauth_client_id = oauth_client_id
       self.oauth_client_secret = oauth_client_secret
     
-    #try logging in and scraping     
+    #try logging in and scraping oauth      
     elif  (email  and password ): 
       self.email = email 
       self.password = password
@@ -48,6 +48,7 @@ class TopScoreClient(object):
       
     self.access_token = self.get_oauth_access_token()
 
+  #submit oauth creds and then get the acces token   
   def get_oauth_access_token(self):
     url = f"{self.base_url}/api/oauth/server"
      
@@ -64,7 +65,7 @@ class TopScoreClient(object):
     else:
       raise TopScoreException(f"OAuth Fail\n{result}")
 
-
+  # login to the site, Scrape the oauth creds 
   def extract_oauth_tokens(self):
 
     # Replace "ultimatecentral" with "usetopscore"
@@ -129,6 +130,7 @@ class TopScoreClient(object):
       except Exception as e2: 
         raise TopScoreException(f"""{e2}""")
 
+  #Client Side Request Forgery function, make a signature based on the client secret without transmitting secret.
   def csrf(self):
     #function currently unused
     nonce = bytes(str(uuid.uuid4()), 'ascii')
@@ -141,6 +143,7 @@ class TopScoreClient(object):
   def construct_url(self, endpoint):
     return f"{self.base_url}/api/{endpoint}"
 
+  # base function for getting data
   def get(self, endpoint, page=1, per_page=100, **params):
     params['page'] = page
     params['per_page'] = per_page
@@ -157,6 +160,7 @@ class TopScoreClient(object):
     headers = {"Authorization": f"Bearer {self.access_token}"} | self.headers
     return requests.post(self.construct_url(endpoint), data=data, params=params, headers=headers)
 
+  # 
   def get_me(self):
     r = self.post("me")
     return r.json()
@@ -178,22 +182,10 @@ class TopScoreClient(object):
     }, **params)
     return r.json()
 
+  #TODO write functions to parse and display results of help pages
   def get_help(self):
     r = self.get("help")
     return r.json()
-
-  def get_person(self, id, **params):
-    r = self.get("persons", id=id, **params)
-    return r.json()
-
-  def get_tags_show(self, **params):
-    r = self.get("tags/show", **params)
-    return r.json()
-
-  def get_games_show(self, **params):
-    r = self.get("games/show", **params)
-    return r.json()
-
 
   # async function to make a single request
   async def fetch(self, endpoint, session, page=1, per_page=100,  **params ):
@@ -211,7 +203,8 @@ class TopScoreClient(object):
       return results
 
 
-  # async function to make multiple requests
+  #async function to make multiple requests to get results from results with over 100 entries
+  #Usually not called directly
   async def fetch_all(self, endpoint, page=1, per_page=100, **params):
     
     result = self.get(endpoint, page, per_page, **params).json()
@@ -230,7 +223,8 @@ class TopScoreClient(object):
           return [results]
     else:
       raise TopScoreException(f"Endpoint: {endpoint} \n Params: {params} \n Result:{result} \nUnable to get a paginated response from TopScore")
-      
+  
+  #Use this function to get all results from GET endpoints  
   def get_all_pages(self,endpoint, **params):
     endpoints = ["tags","games","registrations","events","persons","teams","fields","transactions","persons"]
     
@@ -250,6 +244,19 @@ class TopScoreClient(object):
     else:
       raise TopScoreException(f"Endpoint: {endpoint} \n Params: {params} \n Result:{result} \nUnable to get a paginated response from TopScore")
     return results
+
+  #Individual functions to get data 
+  def get_person(self, id, **params):
+    r = self.get("persons", id=id, **params)
+    return r.json()
+
+  def get_tags_show(self, **params):
+    r = self.get("tags/show", **params)
+    return r.json()
+
+  def get_games_show(self, **params):
+    r = self.get("games/show", **params)
+    return r.json()
     
   def get_tags(self, **params):
     return self.get_paginated("tags", **params)
