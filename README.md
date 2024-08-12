@@ -1,3 +1,9 @@
+
+
+[![PyPI](https://img.shields.io/pypi/v/topscore)](https://pypi.org/project/topscore/)
+
+![Open Issues](https://img.shields.io/github/issues/cherianb59/topscore)
+
 # TopScore API Client
 
 [TopScore](http://www.usetopscore.com/) provides athletic league and event management for a variety of different sports -- Ultimate Frisbee, Rugby, Handball, and so on.   This is a client for their API.  API documentation can be found in [this Google Doc](https://docs.google.com/document/d/148SFmTpsdon5xoGpAeNCokrpaPKKOSDtrLNBHOIq5c4/edit#), and at https://usetopscore.com/api/help.
@@ -6,9 +12,11 @@ Not all functions of the API have been implmented, the focus has been getting da
 
 Installation
 ------------
-This library isn't currently available on pypi yet, so you'll have to install by hand.  To do so:
-  1. (optional but recommended) Activate the virtualenv for your use case
-  2. At the base level of the library repository, run `python setup.py install`
+This library is available on Pypi
+
+``` 
+pip install topscore
+``` 
 
 Examples
 --------
