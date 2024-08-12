@@ -9,11 +9,24 @@ import asyncio
 import requests
 import aiohttp
 from bs4 import BeautifulSoup
+import urllib.parse
+
+#CONSTS
 
 default_headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     'accept-encoding':'gzip'
 }
+
+#HELPERS 
+
+def get_only_endpoint(url):
+    parsed_url = urllib.parse.urlparse(url)
+    path_and_query = parsed_url.path + "?" + parsed_url.query
+    decoded_path_and_query = urllib.parse.unquote(path_and_query)
+    #get rid of '/api'
+    return decoded_path_and_query[4:]
+
 
 class TopScoreException(Exception):
   pass
@@ -124,15 +137,16 @@ class TopScoreClient(object):
 
         if login_error == "Please enter a valid email address." : raise TopScoreException(f"""{login_error}""")
         elif login_error == "Invalid password." : raise TopScoreException(f"""{login_error}""")
-        else : raise TopScoreException(f"""{e1}""")
+        else : raise TopScoreException(f"{e1}")
 
     #catch unknown errors
       except Exception as e2: 
-        raise TopScoreException(f"""{e2}""")
+        raise TopScoreException(f"{e2}")
 
-  #Client Side Request Forgery function, make a signature based on the client secret without transmitting secret.
+  #Client Side Request Forgery token generation, make a signature based on the client secret without transmitting secret.
+  #function currently unused
   def csrf(self):
-    #function currently unused
+    
     nonce = bytes(str(uuid.uuid4()), 'ascii')
     ts = bytes(str(round(time.time())), 'ascii')
     message = bytes(self.client_id, 'ascii') + nonce + ts
@@ -144,14 +158,23 @@ class TopScoreClient(object):
     return f"{self.base_url}/api/{endpoint}"
 
   # base function for getting data
-  def get(self, endpoint, page=1, per_page=100, **params):
+  def get(self, endpoint, page=1, per_page=100, auth_fail = False,  **params):
     params['page'] = page
     params['per_page'] = per_page
-    access_token = self.access_token
     headers = {"Authorization": f"Bearer {self.access_token}"} | self.headers
     
     r = requests.get(self.construct_url(endpoint), params=params, headers=headers)
-          
+
+    rjson = r.json()
+
+    #if access_token fails then regenerate and retry
+    if rjson['status'] == 401 and rjson['errors'][0]['message'] == "Invalid auth token." :      
+    if not auth_fail:
+      self.access_token = self.get_oauth_access_token()
+      return(self.get(endpoint, page, per_page, auth_fail = True,  **params))
+    else : 
+      raise TopScoreException(f"Auth token failed after retry")
+  
     return(r)
 
   def post(self, endpoint, data={}, page=1, per_page=100, **params):
@@ -229,7 +252,8 @@ class TopScoreClient(object):
     endpoints = ["tags","games","registrations","events","persons","teams","fields","transactions","persons"]
     
     if endpoint in endpoints :
-        return [item for sublist in asyncio.run(self.fetch_all(endpoint, **params)) for item in sublist]
+    #flatten list
+      return [item for sublist in asyncio.run(self.fetch_all(endpoint, **params)) for item in sublist]
     else: raise TopScoreException(f"{endpoint} not in {endpoints}")
 
   # non async functions to get data  
@@ -287,4 +311,31 @@ class TopScoreClient(object):
 
   def get_persons(self,  **params):
     return self.get_paginated("persons", **params)
+
+  #get the help page and add all relevant fields
+  def get_all_help(self):
+    get_help = self.get_help()
+    
+    get_help = { h['endpoint']: h for h in get_help['result'] if 'endpoint' in h }
+
+    #make flags for methods accepted
+    for k,v in get_help.items():
+      v['GET'] = 'GET' in v['method']
+      v['POST'] = 'POST' in v['method']
+
+    self.help_docs = fetch_all_help(get_help)
+    
+  #fetch the docs for all endpoints simultaneously  
+  async def fetch_all_help(self, help_endpoints, **params):
+    async with aiohttp.ClientSession() as session:
+      
+      tasks = [client.fetch(get_only_endpoint(v['help_url']) , session , page = 1,  per_page = 100 , **params) for k,v in help_endpoints.items() ]
+      #fetch all the help docs and flatten list
+      results =  [item for sublist in asyncio.run(asyncio.gather(*tasks)) for item in sublist]
+      #go through results and add felds to help 
+      for r in results:
+        endpoint = r['endpoint'] 
+        help_endpoints[endpoint]['fields'] = r['fields'] 
+
+      return help_endpoints
 
