@@ -40,7 +40,7 @@ class TopScoreClient(object):
     
     if not base_url : raise TopScoreException(f"""base_url required""")
     
-    self.base_url = base_url
+    self.base_url = base_url.rstrip('/')
     self.headers = headers
     
     #if these two not empty 
@@ -172,8 +172,11 @@ class TopScoreClient(object):
 
     rjson = r.json()
 
+    if rjson['status'] == 200 : 
+      return(r)
+      
     #if access_token fails then regenerate and retry
-    if rjson['status'] == 401 and rjson['errors'][0]['message'] == "Invalid auth token." :      
+    elif rjson['status'] == 401 and rjson['errors'][0]['message'] == "Invalid auth token." :      
       if not auth_fail:
         self.access_token = self.get_oauth_access_token()
         return(self.get(endpoint, page, per_page, auth_fail = True,  **params))
@@ -302,8 +305,8 @@ class TopScoreClient(object):
   def get_people(self, **params)->List[Dict]:
     return self.get_paginated("persons", **params)
 
-  def get_persons(self, id, **params)->List[Dict]:
-    return self.get_paginated("persons", **params)
+  #def get_persons(self, id, **params)->List[Dict]:
+  #  return self.get_paginated("persons", **params)
 
   def get_teams(self, **params)->List[Dict]:
     return self.get_paginated("teams", **params)
@@ -328,16 +331,16 @@ class TopScoreClient(object):
       v['GET'] = 'GET' in v['method']
       v['POST'] = 'POST' in v['method']
     #add all the fields for each endpoint
-    return( fetch_all_help(get_help))
+    return asyncio.run(self.fetch_all_help(get_help))
     
   async def fetch_all_help(self, help_endpoints: List[Dict], **params) -> List[Dict]:
   #fetch the docs for all endpoints simultaneously  
     async with aiohttp.ClientSession() as session:
       
-      tasks = [client.fetch(get_only_endpoint(v['help_url']) , session , page = 1,  per_page = 100 , **params) for k,v in help_endpoints.items() ]
+      tasks = [self.fetch(get_only_endpoint(v['help_url']) , session , page = 1,  per_page = 100 , **params) for k,v in help_endpoints.items() ]
       #fetch all the help docs and flatten list
-      results =  [item for sublist in asyncio.run(asyncio.gather(*tasks)) for item in sublist]
-      #go through results and add felds to help 
+      results =  [item for sublist in await asyncio.gather(*tasks) for item in sublist]
+      #go through results and add fields to help 
       for r in results:
         endpoint = r['endpoint'] 
         help_endpoints[endpoint]['fields'] = r['fields'] 

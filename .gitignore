@@ -3,5 +3,6 @@ __pycache__/
 build/
 *.pyc
 dist/
+testing/
 topscore.egg-info/
 .ipynb_checkpoints/
